@@ -1,3 +1,5 @@
+;Special thanks to Chibi Akumas
+
 Cursor_X equ UserRam
 Cursor_Y equ UserRam+1
 	ifd BuildX68
