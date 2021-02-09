@@ -1,4 +1,6 @@
 ;Special thanks to Chibi Akumas
+;this is lesson 1
+
 
 Cursor_X equ UserRam
 Cursor_Y equ UserRam+1
