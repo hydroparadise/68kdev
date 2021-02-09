@@ -1,0 +1,1446 @@
+F00:0001       Cursor_X equ UserRam
+F00:0002       Cursor_Y equ UserRam+1
+F00:0003       	ifd BuildX68
+F00:0004       ScrWid256 equ 1
+F00:0005       	endif
+F00:0006       	include ".\src\SrcALL\BasicMacros.asm"
+F01:0001       ;A	d0
+F01:0002       ;BC D1,D4	A1
+F01:0003       ;DE	D2,D5	A2
+F01:0004       ;HL D3,D6	A3
+F01:0005       
+F01:0006       ;IX			A4
+F01:0007       ;IY			A5
+F01:0008       
+F01:0009       	macro PushBc
+F01:0013       
+F01:0014       	
+F01:0015       	macro PopBc
+F01:0019       
+F01:0020       	
+F01:0021       	macro PushDe
+F01:0025       
+F01:0026       	
+F01:0027       	macro PopDe
+F01:0031       
+F01:0032       	
+F01:0033       	macro PushHl
+F01:0038       
+F01:0039       	
+F01:0040       	macro PopHl
+F01:0045       
+F01:0046       	
+F01:0047       	macro PushIX
+F01:0049       
+F01:0050       	
+F01:0051       	macro PopIX
+F01:0053       
+F01:0054       	
+F01:0055       	
+F01:0056       	macro PushIY
+F01:0058       
+F01:0059       	
+F01:0060       	macro PopIY
+F01:0062       
+F01:0063       	
+F01:0064       	
+F01:0065       	macro PushAf
+F01:0068       
+F01:0069       	
+F01:0070       	macro PopAf
+F01:0072       
+F01:0073       	
+F01:0074       	
+F01:0075       	macro PushAll
+F01:0077       
+F01:0078       	macro PopAll
+F01:0080       
+F00:0007       	include ".\src\SrcALL\V1_Header.asm"
+F02:0001       	ifd BuildAST
+F02:0002       		include ".\src\SrcAST\V1_Header.asm"
+F02:0003       	endif
+F02:0004       	ifd BuildGEN
+F02:0005       		include ".\src\SrcGEN\V1_Header.asm"
+F03:0001       
+F03:0002       
+F03:0003       UserRam equ $00FF0000
+F03:0004       
+F03:0005       
+F03:0006       ; hello.asm
+F03:0007       
+F03:0008       ;		LIST	OFF;
+F03:0009       ;		INCLUDE	gen.h
+F03:0010       ;		LIST	ON
+F03:0011       VDP_data	EQU	$C00000	; VDP data, R/W word or longword access only
+F03:0012       VDP_ctrl	EQU	$C00004	; VDP control, word or longword writes only
+F03:0013       
+F03:0014       ;-----------------------------------------------------------------------
+F03:0015       ;	exception vectors
+F03:0016       ;-----------------------------------------------------------------------
+F03:0017       
+F03:0018       
+F03:0019       	DC.L	$FFFFFE00	; startup SP
+               S01:00000000:  FF FF FE 00
+F03:0020       	DC.L	START		; startup PC
+               S01:00000004:  00 00 02 02 [R]
+F03:0021       
+F03:0022       	DS.L	7,RTEnn		; bus,addr,illegal,divzero,CHK,TRAPV,priv
+F03:0023       	DC.L	RTEnn		; trace
+               S01:00000024:  00 00 02 00 [R]
+F03:0024       	DC.L	RTEnn		; line 1010 emulator
+               S01:00000028:  00 00 02 00 [R]
+F03:0025       	DC.L	RTEnn		; line 1111 emulator
+               S01:0000002C:  00 00 02 00 [R]
+F03:0026       	DS.L	4,RTEnn		; unassigned/uninitialized
+F03:0027       	DS.L	8,RTEnn		; unassigned
+F03:0028       	DC.L	RTEnn		; spurious interrupt
+               S01:00000060:  00 00 02 00 [R]
+F03:0029       	DC.L	RTEnn		; interrupt level 1 (lowest priority)
+               S01:00000064:  00 00 02 00 [R]
+F03:0030       	DC.L	ExtInt		; interrupt level 2 = external interrupt
+               S01:00000068:  00 00 02 00 [R]
+F03:0031       	DC.L	RTEnn		; interrupt level 3
+               S01:0000006C:  00 00 02 00 [R]
+F03:0032       	DC.L	HSync		; interrupt level 4 = H-sync interrupt
+               S01:00000070:  00 00 02 00 [R]
+F03:0033       	DC.L	RTEnn		; interrupt level 5
+               S01:00000074:  00 00 02 00 [R]
+F03:0034       	DC.L	VSync		; interrupt level 6 = V-sync interrupt
+               S01:00000078:  00 00 02 00 [R]
+F03:0035       	DC.L	RTEnn		; interrupt level 7 (highest priority)
+               S01:0000007C:  00 00 02 00 [R]
+F03:0036       	DS.L	16,RTEnn		; TRAP instruction vectors
+F03:0037       	DS.L	16,RTEnn		; unassigned
+F03:0038       
+F03:0039       ;-----------------------------------------------------------------------
+F03:0040       ;	cartridge info header
+F03:0041       ;-----------------------------------------------------------------------
+F03:0042       
+F03:0043       	DC.B	"SEGA GENESIS    "	; must start with "SEGA"
+               S01:00000100:  53 45 47 41 20 47 45 4E 45 53 49 53 20 20 20 20
+F03:0044       	DC.B	"(C)---- "		; copyright
+               S01:00000110:  28 43 29 2D 2D 2D 2D 20
+F03:0045        	DC.B	"2006.DEC"		; date
+               S01:00000118:  32 30 30 36 2E 44 45 43
+F03:0046       	DC.B	"Chibiakumas.com                                 " ; cart name
+               S01:00000120:  43 68 69 62 69 61 6B 75 6D 61 73 2E 63 6F 6D 20
+               S01:00000130:  20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20
+F03:0047       	DC.B	"Chibiakumas.com                                 " ; cart name (alt. language)
+               S01:00000150:  43 68 69 62 69 61 6B 75 6D 61 73 2E 63 6F 6D 20
+               S01:00000160:  20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20
+F03:0048       	DC.B	"GM MK-0000 -00"	; program type / catalog number
+               S01:00000180:  47 4D 20 4D 4B 2D 30 30 30 30 20 2D 30 30
+F03:0049       	DC.W	$0000			; ROM checksum
+               S01:0000018E:  00 00
+F03:0050       	DC.B	"J               "	; hardware used
+               S01:00000190:  4A 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20
+F03:0051       	DC.L	$00000000		; start of ROM
+               S01:000001A0:  00 00 00 00
+F03:0052       	DC.L	$003FFFFF		; end of ROM
+               S01:000001A4:  00 3F FF FF
+F03:0053       	DC.L	$00FF0000,$00FFFFFF	; RAM start/end
+               S01:000001A8:  00 FF 00 00
+               S01:000001AC:  00 FF FF FF
+F03:0054       	DC.B	"            "		; backup RAM info
+               S01:000001B0:  20 20 20 20 20 20 20 20 20 20 20 20
+F03:0055       	DC.B	"            "		; modem info
+               S01:000001BC:  20 20 20 20 20 20 20 20 20 20 20 20
+F03:0056       	DC.B	"                                        " ; comment
+               S01:000001C8:  20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20
+               S01:000001D8:  20 20 20 20 20 20 20 20 20 20 20 20 20 20 20 20
+F03:0057       	DC.B	"JUE             "	; regions allowed
+               S01:000001F0:  4A 55 45 20 20 20 20 20 20 20 20 20 20 20 20 20
+F03:0058       
+F03:0059       ;-----------------------------------------------------------------------
+F03:0060       ;	generic exception handler
+F03:0061       ;-----------------------------------------------------------------------
+F03:0062       
+F03:0063       ExtInt
+F03:0064       HSync
+F03:0065       VSync
+F03:0066       RTEnn
+F03:0067       	RTE
+               S01:00000200:  4E 73
+F03:0068       ;-----------------------------------------------------------------------
+F03:0069       ;	main entry point
+F03:0070       ;-----------------------------------------------------------------------
+F03:0071       
+F03:0072       START
+F03:0073       		
+F03:0074       ;		MOVEM.L	(A5)+,D5-D7/A0-A4
+F03:0075       
+F03:0076       		; initialize TMSS
+F03:0077       		MOVE.B	($A10001),D0		; A10001 test the hardware version
+               S01:00000202:  10 39 00 A1 00 01
+F03:0078       		ANDI.B	#$0F,D0
+               S01:00000208:  02 00 00 0F
+F03:0079       		BEQ	NoTmss					; branch if no TMSS
+               S01:0000020C:  67 0A
+F03:0080       		MOVE.L	#'SEGA',($A14000)	; A14000 disable TMSS
+               S01:0000020E:  23 FC 53 45 47 41 00 A1 40 00
+F03:0081       NoTmss
+F03:0082       
+F03:0083       		jsr ScreenINIT
+               S01:00000218:  61 00 00 B4
+F03:0084       
+F02:0006       	endif
+F02:0007       	ifd BuildX68
+F02:0008       		include ".\src\SrcX68\V1_Header.asm"
+F02:0009       	endif
+F02:0010       	ifd BuildAMI
+F02:0011       		include ".\src\SrcAMI\V1_Header.asm"
+F02:0012       	endif
+F02:0013       	ifd BuildNEO
+F02:0014       		include ".\src\SrcNEO\V1_Header.asm"
+F02:0015       	endif
+F02:0016       	ifd BuildSQL
+F02:0017       		include ".\src\SrcSQL\V1_Header.asm"
+F02:0018       	endif
+F02:0019       
+F00:0008       	
+F00:0009       ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;	
+F00:0010       	
+F00:0011       ;Example 1
+F00:0012       	move.l #$69,d0			;Load hex 69 into A
+               S01:0000021C:  70 69
+F00:0013       	jsr monitor 			;Show registers to screen
+               S01:0000021E:  61 00 03 2E
+F00:0014       	jmp *					;Infinite Loop
+               S01:00000222:  60 FE
+F00:0015       	
+F00:0016       	
+F00:0017       ;Example 2	
+F00:0018       	; move.l #$69,d0			;Load D0 with Hex $69
+F00:0019       	; move.l #69,d1			;Load D1 with Decimal 69
+F00:0020       	; move.l (69),d2			;Load D2 from memory address 000069 - Won't work on X68000!
+F00:0021       	; jsr monitor				;Show the monitor
+F00:0022       	; jmp *					;Infinite Loop
+F00:0023       
+F00:0024       
+F00:0025       ;Example 3
+F00:0026       	;move.l #0,d0			;Clear D0
+F00:0027       	;move.l d0,d1			;Clear D1
+F00:0028       	;move.l d0,d2			;Clear D2
+F00:0029       	
+F00:0030       	; move.l #$69696969,d0	;Set D0 to a 32bit number
+F00:0031       	; move.w d0,d1			;Copy 16 bits of D0 to D1
+F00:0032       	; move.b d0,d2			;Copy 8 bits of D0 to D1
+F00:0033       	; move.l #$77777777,d3	;Load D3 with Hex $77777777
+F00:0034       	; move d0,d3				;Copy D0 to D3 without specifying length
+F00:0035       	
+F00:0036       	; jsr monitor				;Show the monitor
+F00:0037       	; jmp *					;Infinite Loop
+F00:0038       
+F00:0039       ;Example 4
+F00:0040       	 ; clr.l d1				;Set D1 to 0
+F00:0041       	 ; moveA.l #$69696969,a0	;Load A0 with Hex $69695959
+F00:0042       	 ; MoveQ.l #$01,d1		;Move Quick Long -128 to 127
+F00:0043       	 ; jsr monitor			;Show the monitor
+F00:0044       	 ; jmp *					;Infinite Loop
+F00:0045       	
+F00:0046       ;Example 5
+F00:0047       
+F00:0048       	  ; move.l #$15,d0		;Set D0 to Hex 15
+F00:0049       	  ; jsr MonitorD0			;Show the monitor
+F00:0050       	  
+F00:0051       	  ; add.l #3,d0			;Add 3
+F00:0052       	  ; jsr MonitorD0			;Show the monitor
+F00:0053       	  ; sub.l #3,d0			;Suptract 3
+F00:0054       	  ; jsr MonitorD0			;Show the monitor
+F00:0055       	  
+F00:0056       	  ; addI.l #1,d0			;Add 3 - Technically we should use AddI with #
+F00:0057       	  ; jsr MonitorD0			;Show the monitor
+F00:0058       	  ; subI.l #1,d0			;Sub 3 - Technically we should use SubI with #
+F00:0059       	  ; jsr MonitorD0			;Show the monitor
+F00:0060       	  
+F00:0061       	  ; addq.l #7,d0			;0-7 only - faster
+F00:0062       	  ; jsr MonitorD0			;Show the monitor
+F00:0063       	  ; subq.l #7,d0			;0-7 only - faster
+F00:0064       	  ; jsr MonitorD0			;Show the monitor
+F00:0065       	  
+F00:0066       	  ; jmp *					;Infinite Loop
+F00:0067       	
+F00:0068       
+F00:0069       ;Example 6	
+F00:0070       	; lea UserRam+100,a0			;Show some of our memory to screen
+F00:0071        	; moveq.l #1,d0				;
+F00:0072       	; jsr Monitor_MemDumpDirect	;
+F00:0073       	
+F00:0074       	; LEA UserRam+100,a0			;Load 3 bytes into A0,A1,A2
+F00:0075       	; LEA UserRam+101,a1			;
+F00:0076       	; LEA UserRam+102,a2			;
+F00:0077       	
+F00:0078       	; move.b #$11,d0				;load $11 into D0
+F00:0079       	; move.b d0,(a0)				;Save D0 to address in A0
+F00:0080       	; move.b #$22,(a1)			;Save $22 directly to address in A1
+F00:0081       		 
+F00:0082       	; move.b #$33,d2				;Load $33 into D2
+F00:0083       	; add.b (a0),d2				;add value from address in A0
+F00:0084       	; add.b (a1),d2				;add value from address in A1
+F00:0085       	; move.b d2,(a2)				;Save A2 to address in A2
+F00:0086       	
+F00:0087       	; lea UserRam+100,a0			;Show the same memory after the
+F00:0088        	; moveq.l #1,d0				;Commands have been performed
+F00:0089       	; jsr Monitor_MemDumpDirect	;
+F00:0090       	
+F00:0091       	; jmp *						;Infinite Loop
+F00:0092       	
+F00:0093       	
+F00:0094       MonitorD0:
+F00:0095       	 move.l d0,-(sp)
+               S01:00000224:  2F 00
+F00:0096       	 jsr Monitor_PushedRegister
+               S01:00000226:  61 00 04 44
+F00:0097       	 jsr NewLine
+               S01:0000022A:  61 00 02 36
+F00:0098       	 rts
+               S01:0000022E:  4E 75
+F00:0099       ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;	
+F00:0100       
+F00:0101       	include ".\src\SrcALL\V1_VdpMemory.asm"
+F04:0001       	ifd BuildGEN
+F04:0002       		include ".\src\SrcGEN\V1_VdpMemory.asm"
+F05:0001       
+F05:0002       DefineTiles:						;Copy D1 bytes of data from A0 to VDP memory D2 
+F05:0003       
+F05:0004       	jsr prepareVram					;Calculate the memory location we want to write
+               S01:00000230:  61 0E
+F05:0005       DefineTilesAgain:						; the tile pattern definitions to
+F05:0006       		move.l (a0)+,d0				
+               S01:00000232:  20 18
+F05:0007       		move.l d0,(VDP_data)		;Send the tile data to the VDP
+               S01:00000234:  23 C0 00 C0 00 00
+F05:0008       		dbra d1,DefineTilesAgain
+               S01:0000023A:  51 C9 FF F6
+F05:0009       		
+F05:0010       	rts
+               S01:0000023E:  4E 75
+F05:0011       			
+F05:0012       prepareVram:							;To select a memory location D2 we need to calculate 
+F05:0013       										;the command byte... depending on the memory location
+F05:0014       	moveM.l d0-d7/a0-a7,-(sp)			;$7FFF0003 = Vram $FFFF.... $40000000=Vram $0000
+               S01:00000240:  48 E7 FF FF
+F05:0015       		move.l d2,d0
+               S01:00000244:  20 02
+F05:0016       		and.w #%1100000000000000,d0		;Shift the top two bits to the far right 
+               S01:00000246:  C0 7C C0 00
+F05:0017       		rol.w #2,d0
+               S01:0000024A:  E5 58
+F05:0018       		
+F05:0019       		and.l #%0011111111111111,d2	    ; shift all the other bits left two bytes
+               S01:0000024C:  C4 BC 00 00 3F FF
+F05:0020       		rol.l #8,d2		
+               S01:00000252:  E1 9A
+F05:0021       		rol.l #8,d2
+               S01:00000254:  E1 9A
+F05:0022       		
+F05:0023       		or.l d0,d2						
+               S01:00000256:  84 80
+F05:0024       		or.l #$40000000,d2				;Set the second bit from the top to 1
+               S01:00000258:  84 BC 40 00 00 00
+F05:0025       										;#%01000000 00000000 00000000 00000000
+F05:0026       		move.l d2,(VDP_ctrl)
+               S01:0000025E:  23 C2 00 C0 00 04
+F05:0027       	moveM.l (sp)+,d0-d7/a0-a7
+               S01:00000264:  4C DF FF FF
+F05:0028       	rts
+               S01:00000268:  4E 75
+F05:0029       
+F05:0030       	
+F05:0031       	;move.l #3,d0	;SX
+F05:0032       	;move.l #3,d1	;SY
+F05:0033       	
+F05:0034       	;move.l #6,d2	;WID
+F05:0035       	;move.l #6,d3	;HEI
+F05:0036       	
+F05:0037       	;move.l #256,d4	;TileStart
+F05:0038       	
+F05:0039       FillAreaWithTiles:					;Set area (d0,d1) Wid:d2 Hei:D3
+F05:0040       	moveM.l d0-d7/a0-a7,-(sp)
+               S01:0000026A:  48 E7 FF FF
+F05:0041       		clr.l d6
+               S01:0000026E:  7C 00
+F05:0042       		clr.l d7
+               S01:00000270:  7E 00
+F05:0043       		
+F05:0044       		subq.l #1,d3					;Reduce our counters by 1 for dbra
+               S01:00000272:  53 83
+F05:0045       		subq.l #1,d2
+               S01:00000274:  53 82
+F05:0046       		
+F05:0047       NextTileLine:
+F05:0048       		move.l d2,-(sp)					;Wid
+               S01:00000276:  2F 02
+F05:0049       			Move.L  #$40000003,d5		;$C000 offset + Vram command
+               S01:00000278:  2A 3C 40 00 00 03
+F05:0050       			Move.L #0,d7
+               S01:0000027E:  7E 00
+F05:0051       			Move.B d1,D7				
+               S01:00000280:  1E 01
+F05:0052       			
+F05:0053       			rol.L #8,D7					; Calculate Ypos
+               S01:00000282:  E1 9F
+F05:0054       			rol.L #8,D7
+               S01:00000284:  E1 9F
+F05:0055       			rol.L #7,D7
+               S01:00000286:  EF 9F
+F05:0056       			add.L D7,D5
+               S01:00000288:  DA 87
+F05:0057       			
+F05:0058       			Move.B d0,D7				;Calculate Xpos
+               S01:0000028A:  1E 00
+F05:0059       			rol.L #8,D7
+               S01:0000028C:  E1 9F
+F05:0060       			rol.L #8,D7
+               S01:0000028E:  E1 9F
+F05:0061       			rol.L #1,D7
+               S01:00000290:  E3 9F
+F05:0062       			add.L D7,D5
+               S01:00000292:  DA 87
+F05:0063       		
+F05:0064       			MOVE.L	D5,(VDP_ctrl)		; C00004 Get VRAM address
+               S01:00000294:  23 C5 00 C0 00 04
+F05:0065       NextTileb:		
+F05:0066       			MOVE.W	D4,(VDP_data)		; C00000 Select tile for mem loc
+               S01:0000029A:  33 C4 00 C0 00 00
+F05:0067       			addq.w #1,d4				;Increase Tilenum
+               S01:000002A0:  52 44
+F05:0068       			dbra d2,NextTileb
+               S01:000002A2:  51 CA FF F6
+F05:0069       			add.w #1,d1					;Move down a line
+               S01:000002A6:  52 41
+F05:0070       		move.l (sp)+,d2
+               S01:000002A8:  24 1F
+F05:0071       		dbra d3,NextTileLine			;Do next line
+               S01:000002AA:  51 CB FF CA
+F05:0072       	moveM.l (sp)+,d0-d7/a0-a7
+               S01:000002AE:  4C DF FF FF
+F05:0073       	rts
+               S01:000002B2:  4E 75
+F05:0074       	
+F05:0075       	
+F05:0076       	
+F05:0077       	
+F05:0078       	
+F05:0079       waitVBlank:							;Bit 3 defines if we're in Vblank
+F05:0080       	move.w VDP_ctrl,d0
+               S01:000002B4:  30 39 00 C0 00 04
+F05:0081       	and.w #%0000000000001000,d0		;See if vblank is running
+               S01:000002BA:  C0 7C 00 08
+F05:0082       	bne waitVBlank					;wait until it is
+               S01:000002BE:  66 F4
+F05:0083       		
+F05:0084       waitVBlank2:
+F05:0085       	move.w VDP_ctrl,d0
+               S01:000002C0:  30 39 00 C0 00 04
+F05:0086       	and.w #%0000000000001000,d0		;See if vblank is running
+               S01:000002C6:  C0 7C 00 08
+F05:0087       	beq waitVBlank2					;wait until it isnt
+               S01:000002CA:  67 F4
+F05:0088       	rts
+               S01:000002CC:  4E 75
+F05:0089       
+F05:0090       	
+F05:0091       	
+F05:0092       	
+F05:0093       ScreenINIT:	
+F05:0094       	LEA	VDPSettings,A5			;initialize registers
+               S01:000002CE:  4B FA 00 BC
+F05:0095       	MOVE.W	(VDP_ctrl),D0		;C00004 read VDP status (interrupt acknowledge?)
+               S01:000002D2:  30 39 00 C0 00 04
+F05:0096       
+F05:0097       	move.l #$00008000,d5		;VDP Reg command
+               S01:000002D8:  2A 3C 00 00 80 00
+F05:0098       	MOVEQ.l	#24-1,D1			;length of video initialization block
+               S01:000002DE:  72 17
+F05:0099       NextInitByte:
+F05:0100       	MOVE.B	(A5)+,D5			;get next video control byte
+               S01:000002E0:  1A 1D
+F05:0101       	MOVE.W	D5,(VDP_ctrl)		;C00004 send write register command to VDP
+               S01:000002E2:  33 C5 00 C0 00 04
+F05:0102       	ADD.W	#$00000100,D5		;point to next VDP register
+               S01:000002E8:  DA 7C 01 00
+F05:0103       	DBRA	D1,NextInitByte		;loop for rest of block
+               S01:000002EC:  51 C9 FF F2
+F05:0104       
+F05:0105       
+F05:0106       	;Define palette
+F05:0107       	move.l #$C0000000,d0					;Color 0
+               S01:000002F0:  20 3C C0 00 00 00
+F05:0108       	move.l d0,VDP_Ctrl
+               S01:000002F6:  23 C0 00 C0 00 04
+F05:0109       	;        ----BBB-GGG-RRR-
+F05:0110       	move.w #%0000011000000000,VDP_data
+               S01:000002FC:  33 FC 06 00 00 C0 00 00
+F05:0111       	
+F05:0112       	move.l #$C0020000,d0					;Color 1
+               S01:00000304:  20 3C C0 02 00 00
+F05:0113       	move.l d0,VDP_Ctrl
+               S01:0000030A:  23 C0 00 C0 00 04
+F05:0114       	move.w #%0000000011101110,VDP_data
+               S01:00000310:  33 FC 00 EE 00 C0 00 00
+F05:0115       	
+F05:0116       	move.l #$C0040000,d0					;Color 2
+               S01:00000318:  20 3C C0 04 00 00
+F05:0117       	move.l d0,VDP_Ctrl
+               S01:0000031E:  23 C0 00 C0 00 04
+F05:0118       	move.w #%0000111011100000,VDP_data
+               S01:00000324:  33 FC 0E E0 00 C0 00 00
+F05:0119       	
+F05:0120       	move.l #$C0060000,d0					;Color 3
+               S01:0000032C:  20 3C C0 06 00 00
+F05:0121       	move.l d0,VDP_Ctrl
+               S01:00000332:  23 C0 00 C0 00 04
+F05:0122       	move.w #%0000000000001110,VDP_data
+               S01:00000338:  33 FC 00 0E 00 C0 00 00
+F05:0123       	
+F05:0124       	move.l #$C01E0000,d0					;Color 15
+               S01:00000340:  20 3C C0 1E 00 00
+F05:0125       	move.l d0,VDP_Ctrl
+               S01:00000346:  23 C0 00 C0 00 04
+F05:0126       	move.w #%0000000011101110,VDP_data
+               S01:0000034C:  33 FC 00 EE 00 C0 00 00
+F05:0127       	
+F05:0128       	MOVE.W	#$8144,(VDP_Ctrl)				; C00004 reg 1 = 0x44 unblank display
+               S01:00000354:  33 FC 81 44 00 C0 00 04
+F05:0129       	
+F05:0130       	jmp FontINIT
+               S01:0000035C:  60 00 01 3C
+F05:0131       	
+F05:0132       	
+F05:0133       	
+F05:0134       	
+F05:0135       SetSprite:	;D0=SpriteNumber, (D1,D2)=(X,Y) D3=Tilenum D4=Link to next sprite
+F05:0136       
+F05:0137       		move.l d2,-(sp)
+               S01:00000360:  2F 02
+F05:0138       			move.l d0,d2
+               S01:00000362:  24 00
+F05:0139       			rol.l #3,d2			;4 bytes per Sprite
+               S01:00000364:  E7 9A
+F05:0140       			add.l #$D800,d2		;Base Sprite Address
+               S01:00000366:  D4 BC 00 00 D8 00
+F05:0141       			jsr prepareVram
+               S01:0000036C:  61 00 FE D2
+F05:0142       		move.l (sp)+,d2
+               S01:00000370:  24 1F
+F05:0143       		
+F05:0144       		move.w d2,(VDP_data)	; ------VV VVVVVVVV - Vpos
+               S01:00000372:  33 C2 00 C0 00 00
+F05:0145       		move.w d4,(VDP_data)	; ----WWHH -LLLLLLL - Width, Height, Link (to next sprite)
+               S01:00000378:  33 C4 00 C0 00 00
+F05:0146       		move.w d3,(VDP_data)	; PCCVHNNN NNNNNNNN - Priority, Color palette , Vflip, Hflip, tile Number
+               S01:0000037E:  33 C3 00 C0 00 00
+F05:0147       		move.w d1,(VDP_data)	; -------H HHHHHHHH - Hpos
+               S01:00000384:  33 C1 00 C0 00 00
+F05:0148       	rts	
+               S01:0000038A:  4E 75
+F05:0149       	
+F05:0150       	
+F05:0151       	EVEN
+F05:0152       VDPSettings:
+F05:0153       		DC.B $04 ; 0 mode register 1											---H-1M-
+               S01:0000038C:  04
+F05:0154       		DC.B $04 ; 1 mode register 2											-DVdP---
+               S01:0000038D:  04
+F05:0155       		DC.B $30 ; 2 name table base for scroll A (A=top 3 bits)				--AAA--- = $C000
+               S01:0000038E:  30
+F05:0156       		DC.B $3C ; 3 name table base for window (A=top 4 bits / 5 in H40 Mode)	--AAAAA- = $F000
+               S01:0000038F:  3C
+F05:0157       		DC.B $07 ; 4 name table base for scroll B (A=top 3 bits)				-----AAA = $E000
+               S01:00000390:  07
+F05:0158       		DC.B $6C ; 5 sprite attribute table base (A=top 7 bits / 6 in H40)		-AAAAAAA = $D800
+               S01:00000391:  6C
+F05:0159       		DC.B $00 ; 6 unused register											--------
+               S01:00000392:  00
+F05:0160       		DC.B $00 ; 7 background color (P=Palette C=Color)						--PPCCCC
+               S01:00000393:  00
+F05:0161       		DC.B $00 ; 8 unused register											--------
+               S01:00000394:  00
+F05:0162       		DC.B $00 ; 9 unused register											--------
+               S01:00000395:  00
+F05:0163       		DC.B $FF ;10 H interrupt register (L=Number of lines)					LLLLLLLL
+               S01:00000396:  FF
+F05:0164       		DC.B $00 ;11 mode register 3											----IVHL
+               S01:00000397:  00
+F05:0165       		DC.B $81 ;12 mode register 4 (C bits both1 = H40 Cell)					C---SIIC
+               S01:00000398:  81
+F05:0166       		DC.B $37 ;13 H scroll table base (A=Top 6 bits)							--AAAAAA = $FC00
+               S01:00000399:  37
+F05:0167       		DC.B $00 ;14 unused register											--------
+               S01:0000039A:  00
+F05:0168       		DC.B $02 ;15 auto increment (After each Read/Write)						NNNNNNNN
+               S01:0000039B:  02
+F05:0169       		DC.B $01 ;16 scroll size (Horiz & Vert size of ScrollA & B)				--VV--HH = 64x32 tiles
+               S01:0000039C:  01
+F05:0170       		DC.B $00 ;17 window H position (D=Direction C=Cells)					D--CCCCC
+               S01:0000039D:  00
+F05:0171       		DC.B $00 ;18 window V position (D=Direction C=Cells)					D--CCCCC
+               S01:0000039E:  00
+F05:0172       		DC.B $FF ;19 DMA length count low										LLLLLLLL
+               S01:0000039F:  FF
+F05:0173       		DC.B $FF ;20 DMA length count high										HHHHHHHH
+               S01:000003A0:  FF
+F05:0174       		DC.B $00 ;21 DMA source address low										LLLLLLLL
+               S01:000003A1:  00
+F05:0175       		DC.B $00 ;22 DMA source address mid										MMMMMMMM
+               S01:000003A2:  00
+F05:0176       		DC.B $80 ;23 DMA source address high (C=CMD)							CCHHHHHH
+               S01:000003A3:  80
+F05:0177       
+F05:0178       
+F05:0179       	even
+F04:0003       	endif
+F04:0004       	ifd BuildNEO
+F04:0005       		include ".\src\SrcNEO\V1_VdpMemory.asm"
+F04:0006       	endif
+F04:0007       	
+F04:0008       
+F00:0102       	
+F00:0103       	include ".\src\SrcALL\V1_BitmapMemory.asm"
+F06:0001       	ifd BuildAST
+F06:0002       		include ".\src\SrcAST\V1_BitmapMemory.asm"
+F06:0003       	endif
+F06:0004       	ifd BuildAMI
+F06:0005       		include ".\src\SrcAMI\V1_BitmapMemory.asm"
+F06:0006       	endif
+F06:0007       	ifd BuildX68
+F06:0008       		include ".\src\SrcX68\V1_BitmapMemory.asm"
+F06:0009       	endif
+F06:0010       	
+F06:0011       
+F00:0104       	include ".\src\SrcALL\V1_Palette.asm"
+F07:0001       	ifd BuildX68
+F07:0002       		include ".\src\SrcX68\V1_Palette.asm"
+F07:0003       	endif
+F07:0004       	ifd BuildNEO
+F07:0005       		include ".\src\SrcNEO\V1_Palette.asm"
+F07:0006       	endif
+F07:0007       	ifd BuildAST
+F07:0008       		include ".\src\SrcAST\V1_Palette.asm"
+F07:0009       	endif
+F07:0010       	ifd BuildAMI
+F07:0011       		include ".\src\SrcAMI\V1_Palette.asm"
+F07:0012       	endif
+F07:0013       	ifd BuildGEN
+F07:0014       		include ".\src\SrcGEN\V1_Palette.asm"
+F08:0001       
+F08:0002       ;Converting: ----GGGG RRRRBBBB 4 bit per channel
+F08:0003       ;To:		 ----BBB- GGG-RRR- 3 bit per channel
+F08:0004       
+F08:0005       SetPalette:		;d0=Palnum d1=-GRB
+F08:0006       	
+F08:0007       	cmp #16*4,d0			;16 colors per palette , 4 palettes
+               S01:000003A4:  B0 7C 00 40
+F08:0008       	bge SetPaletteSkip
+               S01:000003A8:  6C 44
+F08:0009       	
+F08:0010       	moveM.l d0-d2,-(sp)
+               S01:000003AA:  48 E7 E0 00
+F08:0011       
+F08:0012       		and.l #$FF,d0
+               S01:000003AE:  C0 BC 00 00 00 FF
+F08:0013       		rol.b #1,d0
+               S01:000003B4:  E3 18
+F08:0014       		rol.l #8,d0
+               S01:000003B6:  E1 98
+F08:0015       		rol.l #8,d0
+               S01:000003B8:  E1 98
+F08:0016       		or.l #$C0000000,d0	;%C0pp0000 
+               S01:000003BA:  80 BC C0 00 00 00
+F08:0017       		move.l d0,(VDP_ctrl) ;pp=palette entry (2 bytes each 00-7F)
+               S01:000003C0:  23 C0 00 C0 00 04
+F08:0018       		
+F08:0019       		move.w d1,d0
+               S01:000003C6:  30 01
+F08:0020       		and.w #$00E0,d0		;----gggg RRRrbbbb
+               S01:000003C8:  C0 7C 00 E0
+F08:0021       		ror.w #4,d0			;-------- ----RRR-
+               S01:000003CC:  E8 58
+F08:0022       		
+F08:0023       		move.w d0,d2
+               S01:000003CE:  34 00
+F08:0024       		
+F08:0025       		move.w d1,d0		
+               S01:000003D0:  30 01
+F08:0026       		and.w #$0E00,d0		;----GGGg rrrrbbbb
+               S01:000003D2:  C0 7C 0E 00
+F08:0027       		ror.w #4,d0			;-------- GGG-----
+               S01:000003D6:  E8 58
+F08:0028       		or.w d0,d2
+               S01:000003D8:  84 40
+F08:0029       		
+F08:0030       		move.w d1,d0		 
+               S01:000003DA:  30 01
+F08:0031       		and.w #$000E,d0		;----gggg rrrrBBBb
+               S01:000003DC:  C0 7C 00 0E
+F08:0032       		rol.w #8,d0			;----BBB- --------
+               S01:000003E0:  E1 58
+F08:0033       		or.w d0,d2
+               S01:000003E2:  84 40
+F08:0034       		
+F08:0035       		move.w d2,(VDP_data)	
+               S01:000003E4:  33 C2 00 C0 00 00
+F08:0036       	
+F08:0037       	moveM.l (sp)+,d0-d2
+               S01:000003EA:  4C DF 00 07
+F08:0038       SetPaletteSkip
+F08:0039       	rts
+               S01:000003EE:  4E 75
+F08:0040       	
+F08:0041       	
+F07:0015       	endif
+F07:0016       	
+F07:0017       
+F00:0105       	
+F00:0106       	include ".\src\SrcALL\V1_Functions.asm"
+F09:0001       	ifd BuildAST
+F09:0002       		include ".\src\SrcAST\V1_Functions.asm"
+F09:0003       	endif
+F09:0004       	ifd BuildGEN
+F09:0005       		include ".\src\SrcGEN\V1_Functions.asm"
+F10:0001       
+F10:0002       ;-----------------------------------------------------------------------
+F10:0003       
+F10:0004       Delay		MOVE.W	#$95CE,D1	; delay a long time (about 1/20 sec?)
+               S01:000003F0:  32 3C 95 CE
+F10:0005       .1		DBRA	D1,.1
+               S01:000003F4:  51 C9 FF FE
+F10:0006       		DBRA	D0,Delay
+               S01:000003F8:  51 C8 FF F6
+F10:0007       		RTS
+               S01:000003FC:  4E 75
+F10:0008       
+F10:0009       
+F10:0010       
+F10:0011       PrintChar:
+F10:0012       	moveM.l d0-d7/a0-a7,-(sp)
+               S01:000003FE:  48 E7 FF FF
+F10:0013       		and #$FF,d0
+               S01:00000402:  C0 7C 00 FF
+F10:0014       		sub #32,d0
+               S01:00000406:  90 7C 00 20
+F10:0015       PrintCharAlt:		
+F10:0016       		;			
+F10:0017       		Move.L  #$40000003,d5
+               S01:0000040A:  2A 3C 40 00 00 03
+F10:0018       		Move.L #0,d4
+               S01:00000410:  78 00
+F10:0019       		Move.B (Cursor_Y),D4
+               S01:00000412:  18 39 00 FF 00 01
+F10:0020       		ifd ScrWid256
+F10:0021       			add.B #2,D4
+F10:0022       		endif
+F10:0023       		rol.L #8,D4
+               S01:00000418:  E1 9C
+F10:0024       		rol.L #8,D4
+               S01:0000041A:  E1 9C
+F10:0025       		rol.L #7,D4
+               S01:0000041C:  EF 9C
+F10:0026       		;rol.L #2,D4
+F10:0027       		add.L D4,D5
+               S01:0000041E:  DA 84
+F10:0028       		
+F10:0029       		Move.B (Cursor_X),D4
+               S01:00000420:  18 39 00 FF 00 00
+F10:0030       		ifd ScrWid256
+F10:0031       			add.B #4,D4
+F10:0032       		endif
+F10:0033       		rol.L #8,D4
+               S01:00000426:  E1 9C
+F10:0034       		rol.L #8,D4
+               S01:00000428:  E1 9C
+F10:0035       		rol.L #1,D4
+               S01:0000042A:  E3 9C
+F10:0036       		add.L D4,D5
+               S01:0000042C:  DA 84
+F10:0037       		
+F10:0038       		MOVE.L	D5,(VDP_ctrl)			; C00004 write next character to VDP
+               S01:0000042E:  23 C5 00 C0 00 04
+F10:0039       		MOVE.W	D0,(VDP_data)			; C00000 store next word of name data
+               S01:00000434:  33 C0 00 C0 00 00
+F10:0040       
+F10:0041       		addq.b #1,(Cursor_X)
+               S01:0000043A:  52 39 00 FF 00 00
+F10:0042       		move.b (Cursor_X),d0
+               S01:00000440:  10 39 00 FF 00 00
+F10:0043       		cmp.b #39,d0
+               S01:00000446:  B0 3C 00 27
+F10:0044       		bls nextpixel_Xok
+               S01:0000044A:  63 02
+F10:0045       		jsr NewLine
+               S01:0000044C:  61 14
+F10:0046       nextpixel_Xok:
+F10:0047       		
+F10:0048       	moveM.l (sp)+,d0-d7/a0-a7
+               S01:0000044E:  4C DF FF FF
+F10:0049       	rts
+               S01:00000452:  4E 75
+F10:0050       
+F10:0051       
+F10:0052       	
+F10:0053       	
+F10:0054       PrintString:
+F10:0055       		move.b (a3)+,d0
+               S01:00000454:  10 1B
+F10:0056       		cmp.b #255,d0
+               S01:00000456:  B0 3C 00 FF
+F10:0057       		beq PrintString_Done
+               S01:0000045A:  67 04
+F10:0058       		jsr PrintChar
+               S01:0000045C:  61 A0
+F10:0059       		bra PrintString
+               S01:0000045E:  60 F4
+F10:0060       PrintString_Done:		
+F10:0061       	rts
+               S01:00000460:  4E 75
+F10:0062       
+F10:0063       NewLine:
+F10:0064       	addq.b #1,(Cursor_Y)
+               S01:00000462:  52 39 00 FF 00 01
+F10:0065       	move.b #0,(Cursor_X)
+               S01:00000468:  13 FC 00 00 00 FF 00 00
+F10:0066       	rts	
+               S01:00000470:  4E 75
+F10:0067       	
+F10:0068       Locate:
+F10:0069       	move.b d6,(Cursor_Y)
+               S01:00000472:  13 C6 00 FF 00 01
+F10:0070       	move.b d3,(Cursor_X)
+               S01:00000478:  13 C3 00 FF 00 00
+F10:0071       	
+F10:0072       	rts	
+               S01:0000047E:  4E 75
+F10:0073       	
+F10:0074       	
+F10:0075       cls:
+F10:0076       	clr.b d3
+               S01:00000480:  42 03
+F10:0077       	clr.b d6
+               S01:00000482:  42 06
+F10:0078       	jsr Locate
+               S01:00000484:  61 EC
+F10:0079       	move.L #40*25-1,d1
+               S01:00000486:  22 3C 00 00 03 E7
+F10:0080       clsAgain:
+F10:0081       	move #' ',d0
+               S01:0000048C:  30 3C 00 20
+F10:0082       	jsr PrintChar
+               S01:00000490:  61 00 FF 6C
+F10:0083       	dbra d1,clsAgain
+               S01:00000494:  51 C9 FF F6
+F10:0084       	rts
+               S01:00000498:  4E 75
+F10:0085       	
+F10:0086       	
+F10:0087       	
+F10:0088       	
+F10:0089       	
+F10:0090       	
+F10:0091       FontINIT:
+F10:0092       
+F10:0093       	move.L 	#96*8,d6
+               S01:0000049A:  2C 3C 00 00 03 00
+F10:0094       	lea Font,A1
+               S01:000004A0:  43 FA 01 FE
+F10:0095       	MOVE.L	#$40000000,(VDP_Ctrl)			; Start writes to address zero
+               S01:000004A4:  23 FC 40 00 00 00 00 C0 00 04
+F10:0096       	
+F10:0097       NextFont:
+F10:0098       	MOVE.B	(A1)+,d0
+               S01:000004AE:  10 19
+F10:0099       	
+F10:0100       	move.L 	#0,d1
+               S01:000004B0:  72 00
+F10:0101       	roxl.B	#1,d0
+               S01:000004B2:  E3 10
+F10:0102       	roxl.L	#1,d1
+               S01:000004B4:  E3 91
+F10:0103       	rol.L   #3,d1
+               S01:000004B6:  E7 99
+F10:0104       	
+F10:0105       	roxl.B	#1,d0
+               S01:000004B8:  E3 10
+F10:0106       	roxl.L	#1,d1
+               S01:000004BA:  E3 91
+F10:0107       	rol.L   #3,d1
+               S01:000004BC:  E7 99
+F10:0108       	
+F10:0109       	roxl.B	#1,d0
+               S01:000004BE:  E3 10
+F10:0110       	roxl.L	#1,d1
+               S01:000004C0:  E3 91
+F10:0111       	rol.L   #3,d1
+               S01:000004C2:  E7 99
+F10:0112       	
+F10:0113       	roxl.B	#1,d0
+               S01:000004C4:  E3 10
+F10:0114       	roxl.L	#1,d1
+               S01:000004C6:  E3 91
+F10:0115       	rol.L   #3,d1
+               S01:000004C8:  E7 99
+F10:0116       	
+F10:0117       	roxl.B	#1,d0
+               S01:000004CA:  E3 10
+F10:0118       	roxl.L	#1,d1
+               S01:000004CC:  E3 91
+F10:0119       	rol.L   #3,d1
+               S01:000004CE:  E7 99
+F10:0120       	
+F10:0121       	roxl.B	#1,d0
+               S01:000004D0:  E3 10
+F10:0122       	roxl.L	#1,d1
+               S01:000004D2:  E3 91
+F10:0123       	rol.L   #3,d1
+               S01:000004D4:  E7 99
+F10:0124       	
+F10:0125       	roxl.B	#1,d0
+               S01:000004D6:  E3 10
+F10:0126       	roxl.L	#1,d1
+               S01:000004D8:  E3 91
+F10:0127       	rol.L   #3,d1
+               S01:000004DA:  E7 99
+F10:0128       	
+F10:0129       	roxl.B	#1,d0
+               S01:000004DC:  E3 10
+F10:0130       	roxl.L	#1,d1
+               S01:000004DE:  E3 91
+F10:0131       	
+F10:0132       	move.l d1,d0
+               S01:000004E0:  20 01
+F10:0133       	
+F10:0134       	rol.l #1,d1
+               S01:000004E2:  E3 99
+F10:0135       	or.l d0,d1
+               S01:000004E4:  82 80
+F10:0136       	rol.l #1,d1
+               S01:000004E6:  E3 99
+F10:0137       	or.l d0,d1
+               S01:000004E8:  82 80
+F10:0138       	rol.l #1,d1
+               S01:000004EA:  E3 99
+F10:0139       	or.l d0,d1
+               S01:000004EC:  82 80
+F10:0140       	
+F10:0141       	MOVE.L	d1,(VDP_Data)	;  write next longword of charset to VDP
+               S01:000004EE:  23 C1 00 C0 00 00
+F10:0142       
+F10:0143       	DBRA	D6,NextFont		; loop until done
+               S01:000004F4:  51 CE FF B8
+F10:0144       	rts
+               S01:000004F8:  4E 75
+F10:0145       	
+F10:0146       
+F10:0147       	
+F10:0148       	
+F10:0149       	
+F10:0150       	
+F10:0151       	
+F10:0152       	
+F10:0153       	
+F10:0154       	
+F10:0155       
+F10:0156       
+F09:0006       	endif
+F09:0007       	ifd BuildX68
+F09:0008       		include ".\src\SrcX68\V1_Functions.asm"
+F09:0009       	endif
+F09:0010       	ifd BuildAMI
+F09:0011       		include ".\src\SrcAMI\V1_Functions.asm"
+F09:0012       	endif
+F09:0013       	ifd BuildNEO
+F09:0014       		include ".\src\SrcNEO\V1_Functions.asm"
+F09:0015       	endif
+F09:0016       	ifd BuildSQL
+F09:0017       		include ".\src\SrcSQL\V1_Functions.asm"
+F09:0018       	endif
+F09:0019       
+F00:0107       	include ".\src\SrcALL\Multiplatform_Monitor.asm"
+F11:0001       
+F11:0002       
+F11:0003       ShowReg:
+F11:0004       	
+F11:0005       		move.w #$0000,d0
+               S01:000004FA:  30 3C 00 00
+F11:0006       		move.b (a0),d0
+               S01:000004FE:  10 10
+F11:0007       		bsr PrintHex
+               S01:00000500:  61 10
+F11:0008       		move.b (1,a0),d0
+               S01:00000502:  10 28 00 01
+F11:0009       		bsr PrintHex
+               S01:00000506:  61 0A
+F11:0010       		move.b (2,a0),d0
+               S01:00000508:  10 28 00 02
+F11:0011       		bsr PrintHex
+               S01:0000050C:  61 04
+F11:0012       		move.b (3,a0),d0
+               S01:0000050E:  10 28 00 03
+F11:0013       		;bsr PrintHex	
+F11:0014       		
+F11:0015       PrintHex:
+F11:0016       	pushall
+F12:0001       		moveM.l d0-d7/a0-a7,-(sp)
+               S01:00000512:  48 E7 FF FF
+F11:0017       		move.w d0,d2
+               S01:00000516:  34 00
+F11:0018       		move.w d2,d1
+               S01:00000518:  32 02
+F11:0019       		and.w #%11110000,d1
+               S01:0000051A:  C2 7C 00 F0
+F11:0020       		ror.b #4,D1	
+               S01:0000051E:  E8 19
+F11:0021       		bsr PrintHexChar
+               S01:00000520:  61 0E
+F11:0022       		
+F11:0023       		move.w d2,d1
+               S01:00000522:  32 02
+F11:0024       		and.w #%00001111,d1
+               S01:00000524:  C2 7C 00 0F
+F11:0025       		bsr PrintHexChar	
+               S01:00000528:  61 06
+F11:0026       	popall
+F13:0001       		moveM.l (sp)+,d0-d7/a0-a7
+               S01:0000052A:  4C DF FF FF
+F11:0027       	rts
+               S01:0000052E:  4E 75
+F11:0028       PrintHexChar:	
+F11:0029       	move.w d1,d0
+               S01:00000530:  30 01
+F11:0030       	and.l #$FF,d0
+               S01:00000532:  C0 BC 00 00 00 FF
+F11:0031       	cmp.b #9,d0
+               S01:00000538:  B0 3C 00 09
+F11:0032       	ble PrintHexCharLessThan10
+               S01:0000053C:  6F 08
+F11:0033       	add.w #'A'-10,d0
+               S01:0000053E:  D0 7C 00 37
+F11:0034       	jmp PrintChar
+               S01:00000542:  60 00 FE BA
+F11:0035       PrintHexCharLessThan10:		
+F11:0036       	add.w #'0',d0
+               S01:00000546:  D0 7C 00 30
+F11:0037       	jmp PrintChar
+               S01:0000054A:  60 00 FE B2
+F11:0038       	
+F11:0039       	
+F11:0040       	
+F11:0041       Monitor:
+F11:0042       	moveM.l d0-d7/a0-a7,-(sp)
+               S01:0000054E:  48 E7 FF FF
+F11:0043       
+F11:0044       	move.l sp,a0
+               S01:00000552:  20 4F
+F11:0045       
+F11:0046       	
+F11:0047       	move.w #'0',d5
+               S01:00000554:  3A 3C 00 30
+F11:0048       	
+F11:0049       ShowNextReg:
+F11:0050       	move.w #'D',d0
+               S01:00000558:  30 3C 00 44
+F11:0051       	bsr PrintChar
+               S01:0000055C:  61 00 FE A0
+F11:0052       	move.w d5,d0
+               S01:00000560:  30 05
+F11:0053       	bsr PrintChar
+               S01:00000562:  61 00 FE 9A
+F11:0054       	move.w #':',d0
+               S01:00000566:  30 3C 00 3A
+F11:0055       	bsr PrintChar
+               S01:0000056A:  61 00 FE 92
+F11:0056       	bsr ShowReg
+               S01:0000056E:  61 8A
+F11:0057       	
+F11:0058       	move.w #' ',d0
+               S01:00000570:  30 3C 00 20
+F11:0059       	bsr PrintChar
+               S01:00000574:  61 00 FE 88
+F11:0060       	bsr PrintChar
+               S01:00000578:  61 00 FE 84
+F11:0061       	bsr PrintChar
+               S01:0000057C:  61 00 FE 80
+F11:0062       	
+F11:0063       	add #8*4,a0
+               S01:00000580:  41 E8 00 20
+F11:0064       	
+F11:0065       	move.w #'A',d0
+               S01:00000584:  30 3C 00 41
+F11:0066       	bsr PrintChar
+               S01:00000588:  61 00 FE 74
+F11:0067       	move.w d5,d0
+               S01:0000058C:  30 05
+F11:0068       	bsr PrintChar
+               S01:0000058E:  61 00 FE 6E
+F11:0069       	move.w #':',d0
+               S01:00000592:  30 3C 00 3A
+F11:0070       	bsr PrintChar
+               S01:00000596:  61 00 FE 66
+F11:0071       	bsr ShowReg
+               S01:0000059A:  61 00 FF 5E
+F11:0072       	
+F11:0073       	sub #8*4,a0
+               S01:0000059E:  41 E8 FF E0
+F11:0074       	add #4,a0
+               S01:000005A2:  58 48
+F11:0075       	
+F11:0076       	bsr NewLine
+               S01:000005A4:  61 00 FE BC
+F11:0077       	
+F11:0078       	add #1,d5
+               S01:000005A8:  52 45
+F11:0079       	cmp #'8',d5
+               S01:000005AA:  BA 7C 00 38
+F11:0080       	bne ShowNextReg
+               S01:000005AE:  66 A8
+F11:0081       	
+F11:0082       	add #8*4,a0
+               S01:000005B0:  41 E8 00 20
+F11:0083       	move.w #'P',d0
+               S01:000005B4:  30 3C 00 50
+F11:0084       	bsr PrintChar
+               S01:000005B8:  61 00 FE 44
+F11:0085       	move.w #'C',d0
+               S01:000005BC:  30 3C 00 43
+F11:0086       	bsr PrintChar
+               S01:000005C0:  61 00 FE 3C
+F11:0087       	move.w #':',d0
+               S01:000005C4:  30 3C 00 3A
+F11:0088       	
+F11:0089       	bsr PrintChar
+               S01:000005C8:  61 00 FE 34
+F11:0090       	bsr ShowReg
+               S01:000005CC:  61 00 FF 2C
+F11:0091       	bsr NewLine	
+               S01:000005D0:  61 00 FE 90
+F11:0092       
+F11:0093       
+F11:0094       	moveM.l (sp)+,d0-d7/a0-a7
+               S01:000005D4:  4C DF FF FF
+F11:0095       
+F11:0096       	rts
+               S01:000005D8:  4E 75
+F11:0097       
+F11:0098       ;usage:
+F11:0099       ;	lea Address,a0
+F11:0100       ; 	moveq.l #6,d0
+F11:0101       ;	jsr Monitor_MemDumpDirect
+F11:0102       Monitor_MemDumpDirect:
+F11:0103       	moveM.l d0-d7/a0-a7,-(sp)
+               S01:000005DA:  48 E7 FF FF
+F11:0104       		Movea.l a0,a1
+               S01:000005DE:  22 48
+F11:0105       		Move.w d0,d4
+               S01:000005E0:  38 00
+F11:0106       		jsr Monitor_MemDumpDraw
+               S01:000005E2:  61 22
+F11:0107       	moveM.l (sp)+,d0-d7/a0-a7
+               S01:000005E4:  4C DF FF FF
+F11:0108       	rts
+               S01:000005E8:  4E 75
+F11:0109       	
+F11:0110       ;usage:
+F11:0111       	;jsr Monitor_MemDump
+F11:0112       	;dc.l $00000000
+F11:0113       	;dc.w $6
+F11:0114       Monitor_MemDump:
+F11:0115       	moveM.l d0-d7/a0-a7,-(sp)
+               S01:000005EA:  48 E7 FF FF
+F11:0116       	bsr NewLine
+               S01:000005EE:  61 00 FE 72
+F11:0117       	Move.l (64,sp),a0
+               S01:000005F2:  20 6F 00 40
+F11:0118       	;jsr Monitor
+F11:0119       	Movea.l (a0),a1
+               S01:000005F6:  22 50
+F11:0120       	Move.w (4,a0),d4
+               S01:000005F8:  38 28 00 04
+F11:0121       	
+F11:0122       	
+F11:0123       	jsr Monitor_MemDumpDraw
+               S01:000005FC:  61 08
+F11:0124       	
+F11:0125       	moveM.l (sp)+,d0-d7/a0-a7
+               S01:000005FE:  4C DF FF FF
+F11:0126       	add.l #6,(sp)
+               S01:00000602:  5C 97
+F11:0127       	rts
+               S01:00000604:  4E 75
+F11:0128       	
+F11:0129       Monitor_MemDumpDraw:	
+F11:0130       	move.l a1,d0
+               S01:00000606:  20 09
+F11:0131       	rol.l #8,d0
+               S01:00000608:  E1 98
+F11:0132       	bsr PrintHex
+               S01:0000060A:  61 00 FF 06
+F11:0133       	rol.l #8,d0
+               S01:0000060E:  E1 98
+F11:0134       	bsr PrintHex
+               S01:00000610:  61 00 FF 00
+F11:0135       	rol.l #8,d0
+               S01:00000614:  E1 98
+F11:0136       	bsr PrintHex
+               S01:00000616:  61 00 FE FA
+F11:0137       	rol.l #8,d0
+               S01:0000061A:  E1 98
+F11:0138       	bsr PrintHex
+               S01:0000061C:  61 00 FE F4
+F11:0139       	
+F11:0140       	
+F11:0141       	Move.b #':',d0
+               S01:00000620:  10 3C 00 3A
+F11:0142       	bsr PrintChar
+               S01:00000624:  61 00 FD D8
+F11:0143       	bsr NewLine
+               S01:00000628:  61 00 FE 38
+F11:0144       MemDump_NextLine:
+F11:0145       	move.l #7,d3
+               S01:0000062C:  76 07
+F11:0146       MemDump_NextByte:
+F11:0147       	move.b (a1)+,d0
+               S01:0000062E:  10 19
+F11:0148       	bsr PrintHex
+               S01:00000630:  61 00 FE E0
+F11:0149       	Move.b #' ',d0
+               S01:00000634:  10 3C 00 20
+F11:0150       	bsr PrintChar
+               S01:00000638:  61 00 FD C4
+F11:0151       	dbra d3,MemDump_NextByte
+               S01:0000063C:  51 CB FF F0
+F11:0152       	;jsr Monitor
+F11:0153       	subq.l #8,a1
+               S01:00000640:  51 89
+F11:0154       	move.w #7,d3
+               S01:00000642:  36 3C 00 07
+F11:0155       MemDump_NextChar:
+F11:0156       	move.b (a1)+,d0
+               S01:00000646:  10 19
+F11:0157       	cmp #32,d0
+               S01:00000648:  B0 7C 00 20
+F11:0158       	blt MemDump_BadChar
+               S01:0000064C:  6D 08
+F11:0159       	cmp #128,d0
+               S01:0000064E:  B0 7C 00 80
+F11:0160       	bgt MemDump_BadChar
+               S01:00000652:  6E 02
+F11:0161       	bra MemDump_OkChar
+               S01:00000654:  60 04
+F11:0162       MemDump_BadChar:
+F11:0163       	Move.b #'.',d0
+               S01:00000656:  10 3C 00 2E
+F11:0164       MemDump_OkChar:
+F11:0165       	bsr PrintChar
+               S01:0000065A:  61 00 FD A2
+F11:0166       	dbra d3,MemDump_NextChar
+               S01:0000065E:  51 CB FF E6
+F11:0167       	bsr NewLine
+               S01:00000662:  61 00 FD FE
+F11:0168       	
+F11:0169       	sub.b #1,d4
+               S01:00000666:  53 04
+F11:0170       	bne MemDump_NextLine
+               S01:00000668:  66 C2
+F11:0171       	
+F11:0172       	
+F11:0173       	rts
+               S01:0000066A:  4E 75
+F11:0174       	
+F11:0175       ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+F11:0176       	
+F11:0177       	
+F11:0178       Monitor_PushedRegister:
+F11:0179       	
+F11:0180       	moveM.l d0-d7/a0-a7,-(sp)
+               S01:0000066C:  48 E7 FF FF
+F11:0181       	Move.b #'*',d0
+               S01:00000670:  10 3C 00 2A
+F11:0182       	bsr PrintChar
+               S01:00000674:  61 00 FD 88
+F11:0183       	move.l sp,a0
+               S01:00000678:  20 4F
+F11:0184       	add.l #64+4,a0
+               S01:0000067A:  41 E8 00 44
+F11:0185       	bsr ShowReg
+               S01:0000067E:  61 00 FE 7A
+F11:0186       	Move.b #'*',d0
+               S01:00000682:  10 3C 00 2A
+F11:0187       	bsr PrintChar
+               S01:00000686:  61 00 FD 76
+F11:0188       	moveM.l (sp)+,d0-d7/a0-a7
+               S01:0000068A:  4C DF FF FF
+F11:0189       	move.l (sp)+,(sp)			;Write over the pushed register with the return value
+               S01:0000068E:  2E 9F
+F11:0190       	rts
+               S01:00000690:  4E 75
+F00:0108       	
+F00:0109       	include ".\src\SrcALL\BasicFunctions.asm"	
+F14:0001       CLDIR0:
+F14:0002       	clr.l d0
+               S01:00000692:  70 00
+F14:0003       CLDIR:
+F14:0004       	move.l a3,a2
+               S01:00000694:  24 4B
+F14:0005       	move.b d0,(a2)+
+               S01:00000696:  14 C0
+F14:0006       LDIR:
+F14:0007       LDIRAgain:
+F14:0008       	move.b (a3)+,(a2)+
+               S01:00000698:  14 DB
+F14:0009       	subq.l #1,d1
+               S01:0000069A:  53 81
+F14:0010       	bne LDIRAgain
+               S01:0000069C:  66 FA
+F14:0011       	rts
+               S01:0000069E:  4E 75
+F14:0012       
+F00:0110       	include ".\src\SrcALL\V1_DataArea.asm"
+F15:0001       	ifd BuildAST
+F15:0002       		include ".\src\SrcAST\V1_DataArea.asm"
+F15:0003       	endif
+F15:0004       
+F00:0111       		
+F00:0112       ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+F00:0113       ;				Data Area
+F00:0114       ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+F00:0115       	ifnd BuildNEO			;NeoGeo Doesn't use font or Tiles (they are in the fixmap)
+F00:0116       Font:
+F00:0117       		incbin ".\src\ResALL\Font96.FNT"
+               S01:000006A0:  00 00 00 00 00 00 00 00 10 18 18 18 18 00 18 00
+               S01:000006B0:  28 6C 28 00 00 00 00 00 00 28 7C 28 7C 28 00 00
+F00:0118       	endif
+F00:0119       
+F00:0120       
+F00:0121       	even
+F00:0122       	include ".\src\SrcALL\V1_RamArea.asm"
+F16:0001       	ifd BuildAST
+F16:0002       		include ".\src\SrcAST\V1_RamArea.asm"
+F16:0003       	endif
+F16:0004       	ifd BuildX68
+F16:0005       		include ".\src\SrcX68\V1_RamArea.asm"
+F16:0006       	endif
+F16:0007       	ifd BuildAMI
+F16:0008       		include ".\src\SrcAMI\V1_RamArea.asm"
+F16:0009       	endif
+F16:0010       
+F00:0123       ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+F00:0124       ;				Ram Area - May not be possible on all systems!!!
+F00:0125       ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+F00:0126       	ifnd UserRam
+F00:0127       UserRam:
+F00:0128       	ds $1000
+F00:0129       	endif
+F00:0130       	
+F00:0131       	
+F00:0132       	
+F00:0133       	include ".\src\SrcALL\V1_Footer.asm"
+F17:0001       	ifd BuildAST
+F17:0002       		;include ".\src\SrcAST\V1_Footer.asm"
+F17:0003       	endif
+F17:0004       	ifd BuildNEO
+F17:0005       		include ".\src\SrcNEO\V1_Footer.asm"
+F17:0006       	endif
+F17:0007       
+F00:0134       
+
+
+Sections:
+S01  CODE
+
+
+Sources:
+F00  Lesson1.asm
+F01  ./src/SrcALL/BasicMacros.asm
+F02  ./src/SrcALL/V1_Header.asm
+F03  ./src/SrcGEN/V1_Header.asm
+F04  ./src/SrcALL/V1_VdpMemory.asm
+F05  ./src/SrcGEN/V1_VdpMemory.asm
+F06  ./src/SrcALL/V1_BitmapMemory.asm
+F07  ./src/SrcALL/V1_Palette.asm
+F08  ./src/SrcGEN/V1_Palette.asm
+F09  ./src/SrcALL/V1_Functions.asm
+F10  ./src/SrcGEN/V1_Functions.asm
+F11  ./src/SrcALL/Multiplatform_Monitor.asm
+F12  PushAll
+F13  PopAll
+F14  ./src/SrcALL/BasicFunctions.asm
+F15  ./src/SrcALL/V1_DataArea.asm
+F16  ./src/SrcALL/V1_RamArea.asm
+F17  ./src/SrcALL/V1_Footer.asm
+
+
+Symbols:
+LDIRAgain LAB (0x698) sec=CODE 
+LDIR LAB (0x698) UNUSED sec=CODE 
+CLDIR LAB (0x694) UNUSED sec=CODE 
+CLDIR0 LAB (0x692) UNUSED sec=CODE 
+MemDump_OkChar LAB (0x65a) sec=CODE 
+MemDump_BadChar LAB (0x656) sec=CODE 
+MemDump_NextChar LAB (0x646) sec=CODE 
+MemDump_NextByte LAB (0x62e) sec=CODE 
+MemDump_NextLine LAB (0x62c) sec=CODE 
+Monitor_MemDump LAB (0x5ea) UNUSED sec=CODE 
+Monitor_MemDumpDraw LAB (0x606) sec=CODE 
+Monitor_MemDumpDirect LAB (0x5da) UNUSED sec=CODE 
+ShowNextReg LAB (0x558) sec=CODE 
+PrintHexCharLessThan10 LAB (0x546) sec=CODE 
+PrintHexChar LAB (0x530) sec=CODE 
+CARG EXPR(0=0x0) INTERNAL 
+PrintHex LAB (0x512) sec=CODE 
+ShowReg LAB (0x4fa) sec=CODE 
+NextFont LAB (0x4ae) sec=CODE 
+Font LAB (0x6a0) sec=CODE 
+clsAgain LAB (0x48c) sec=CODE 
+cls LAB (0x480) UNUSED sec=CODE 
+Locate LAB (0x472) sec=CODE 
+PrintString_Done LAB (0x460) sec=CODE 
+PrintString LAB (0x454) sec=CODE 
+nextpixel_Xok LAB (0x44e) sec=CODE 
+PrintCharAlt LAB (0x40a) UNUSED sec=CODE 
+PrintChar LAB (0x3fe) sec=CODE 
+ Delay .1 LAB (0x3f4) sec=CODE 
+Delay LAB (0x3f0) sec=CODE 
+SetPaletteSkip LAB (0x3ee) sec=CODE 
+SetPalette LAB (0x3a4) UNUSED sec=CODE 
+SetSprite LAB (0x360) UNUSED sec=CODE 
+FontINIT LAB (0x49a) sec=CODE 
+NextInitByte LAB (0x2e0) sec=CODE 
+VDPSettings LAB (0x38c) sec=CODE 
+waitVBlank2 LAB (0x2c0) sec=CODE 
+waitVBlank LAB (0x2b4) sec=CODE 
+NextTileb LAB (0x29a) sec=CODE 
+NextTileLine LAB (0x276) sec=CODE 
+FillAreaWithTiles LAB (0x26a) UNUSED sec=CODE 
+DefineTilesAgain LAB (0x232) sec=CODE 
+prepareVram LAB (0x240) sec=CODE 
+DefineTiles LAB (0x230) UNUSED sec=CODE 
+NewLine LAB (0x462) sec=CODE 
+Monitor_PushedRegister LAB (0x66c) sec=CODE 
+MonitorD0 LAB (0x224) UNUSED sec=CODE 
+ *current pc dummy* LAB (0x222) INTERNAL PROT sec=CODE 
+monitor LAB (0x54e) sec=CODE 
+ScreenINIT LAB (0x2ce) sec=CODE 
+NoTmss LAB (0x218) sec=CODE 
+VSync LAB (0x200) REF sec=CODE 
+HSync LAB (0x200) REF sec=CODE 
+ExtInt LAB (0x200) REF sec=CODE 
+RTEnn LAB (0x200) REF sec=CODE 
+START LAB (0x202) REF sec=CODE 
+VDP_ctrl EXPR(12582916=0xc00004) EQU 
+VDP_data EXPR(12582912=0xc00000) EQU 
+Cursor_Y EXPR(16711681=0xff0001) EQU 
+Cursor_X EXPR(16711680=0xff0000) EQU 
+UserRam EXPR(16711680=0xff0000) EQU 
+_MOVEMBYTES EXPR(64=0x40) INTERNAL 
+ MOVEMSIZE EXPR(4=0x4) INTERNAL 
+_MOVEMREGS EXPR(65535=0xffff) INTERNAL 
+__LINE__ EXPR(134=0x86) INTERNAL 
+__FO EXPR(0=0x0) INTERNAL 
+__RS EXPR(0=0x0) INTERNAL 
+REPTN EXPR(-1=0xffffffff) INTERNAL 
+__VASM EXPR(1=0x1) INTERNAL 
+BuildGEN EXPR(1=0x1) UNUSED 
+vasm EXPR(1=0x1) UNUSED 
+__UNIXFS EXPR(0=0x0) INTERNAL 
+
+There have been no errors.
